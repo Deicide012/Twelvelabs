@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video Uploader</title>
+</head>
+<body>
+    <h1>Upload a Video for Embedding</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="video_file" required>
+        <button type="submit">Upload</button>
+    </form>
+    <p id="status"></p>
+    <pre id="embeddings"></pre>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+
+            document.getElementById('status').textContent = "Uploading video...";
+
+            try {
+                const uploadResponse = await fetch('/upload-video', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const uploadData = await uploadResponse.json();
+                if (!uploadResponse.ok) {
+                    throw new Error(uploadData.error);
+                }
+
+                const taskId = uploadData.task_id;
+                document.getElementById('status').textContent = "Video uploaded. Waiting for embedding to complete...";
+
+                // Polling task status
+                let status;
+                do {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    const statusResponse = await fetch(`/task-status/${taskId}`);
+                    const statusData = await statusResponse.json();
+                    status = statusData.status;
+                } while (status !== 'ready');
+
+                document.getElementById('status').textContent = "Embedding complete! Fetching results...";
+
+                const embeddingsResponse = await fetch(`/retrieve-embeddings/${taskId}`);
+                const embeddingsData = await embeddingsResponse.json();
+
+                if (embeddingsData.embeddings) {
+                    document.getElementById('embeddings').textContent = JSON.stringify(embeddingsData.embeddings, null, 2);
+                } else {
+                    document.getElementById('embeddings').textContent = "No embeddings found.";
+                }
+            } catch (error) {
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
